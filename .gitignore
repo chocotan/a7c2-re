@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+vendor/
+evidence/
+output/
+*.img
+*.img.log
+*.zip
+*.tar
+*.tar.gz
