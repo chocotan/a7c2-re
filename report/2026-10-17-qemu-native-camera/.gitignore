@@ -1,0 +1,35 @@
+# Generated Sony assets and local experiment data are not public source.
+runtime/analysis/menu-root/
+runtime/analysis/unpacked/
+runtime/analysis/libIMDB-menu.so
+runtime/analysis/firmware-identity.json
+runtime/analysis/native-assets.json
+runtime/analysis/.native-assets-staging-*/
+runtime/analysis/menu-*.cpio
+runtime/analysis/menu-*.ext2
+runtime/analysis/menu-observe.so
+runtime/analysis/menu-runs/
+runtime/analysis/ui-runs/
+runtime/analysis/native-window-check/
+runtime/analysis/native-controls-check/
+runtime/analysis/input-replay-check/
+runtime/analysis/mutex-trace-check/
+runtime/analysis/file-media-check/
+runtime/analysis/qemu-kernel-output*/
+runtime/analysis/.menu-probe.lock
+runtime/analysis/latest-menu-run.txt
+runtime/analysis/__pycache__/
+runtime/analysis/vendor/**/__pycache__/
+# Open-source build/cache archives and programs have separate source/hash records.
+runtime/sources/qemu-*/build*/
+runtime/sources/qemu-tools/
+runtime/analysis/qemu-virt-board/*.dtb
+source/*.log
+source/build-programs.sha256
+source/vendor/*.tar.*
+source/build/
+*.core
+# The small MIT FAT implementation is public source, unlike firmware/vendor assets.
+!runtime/analysis/vendor/
+runtime/analysis/vendor/*
+!runtime/analysis/vendor/fwtool/

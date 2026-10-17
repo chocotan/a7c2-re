@@ -1,0 +1,2 @@
+# Runtime PNG encoding/decoding and image verification (tested with 12.3.0).
+Pillow>=10,<13

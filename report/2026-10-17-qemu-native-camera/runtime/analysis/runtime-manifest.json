@@ -1,0 +1,7 @@
+{
+  "usr/lib/appFw.so": "2ea02f7ecbc5bb917316fe8ef4ce5ffd87eb66efaae78ba2ce11420552df539b",
+  "usr/lib/libObj.so": "c0897d72a40bf0a161fa7f89e9a34eef4d19e0506c7817a5c11a6f53897cdbbc",
+  "test_libIMDB_sha256": "0ebba8dd2fefad4684419d1111a56c659c7fd04473c04da39e6f2e7d8ac0facf",
+  "test_libIMDB_clear_mask": 7,
+  "scope": "Fixed firmware identities; generated QEMU, observer and cpio hashes are recorded per run."
+}
