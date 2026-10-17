@@ -29,6 +29,12 @@ Sony官网可能只展示更新版本。本轮没有联网重新确认2.01旧版
 - `--format-card`会重建卡的分区表，必须使用已备份、可清空的专用卡。这里不指定任何读者机器上的磁盘设备名。
 - 保留分区大小、SHA-256、文件系统结构校验与参照树比对结果。`a7c2-rootfs.img`、`a7c2-usr.img`等转储命名不等同于官方解包目录命名。
 
+还可以使用百度网盘链接下载作者的a7c2系统镜像：
+```
+6YCa6L+H572R55uY5YiG5Lqr55qE5paH5Lu277yaYTdjMmltZy56aXAK6ZO+5o6lOiBodHRwczovL3Bhbi5iYWlkdS5jb20vcy8xeDIwdW5wbGZjR1JCY1BvYjI2Z3lCUT9wd2Q9NW5qYyDmj5Dlj5bnoIE6IDVuamMg5aSN5Yi26L+Z5q615YaF5a655ZCO5omT5byA55m+5bqm572R55uY5omL5py6QXBw77yM5pON5L2c5pu05pa55L6/5ZOmIAotLeadpeiHqueZvuW6pue9keebmOi2hee6p+S8muWRmHY555qE5YiG5Lqr
+```
+地址请Base64解码
+
 **真实转储并非当前导入器的自动兼容输入。** 分区长度、尾部填充、可写状态和个人设置都可能与升级包不同。应先只读识别和逐文件对照，再单独实现/验证导入配置；不要重命名、裁剪或改hash清单来假装匹配。设备私有Backup、序列号、配对/网络信息不应混入公开包。
 
 ### fastboot：先确认设备与实际读出命令
