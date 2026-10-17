@@ -105,6 +105,34 @@ ls -l /etc/profile-ran.txt; cat /etc/profile-ran.txt
 - 写入用 `--write-file /etc/profile=<本地文件>`（MSC 层 ✓，见 §2 的写入语义）；
 - **可逆**：把内容覆写成 2 字节（如 `##`）即失效；不需要时直接 `rm` ✓。
 
+## 3.6 预装救砖网（必须在设备健康时装）
+
+会话通道要靠设备能认证才用得起来；真变砖时它自己就进不去了。所以救砖网只能**提前装**。
+
+```bash
+python usb_service_probe.py --install-rescue \
+  --deploy-shell --approve-preload arm-preload-once --deadline 300
+```
+
+安装后的布局：
+
+| 位置 | 作用 |
+|---|---|
+| `/etc/profile` | 钩子：挂卡 → 若卡上有 `/tmp/sd/a7c2-rescue.sh` 就执行（每次登录 shell、root） |
+| 卡上 `a7c2-rescue.sh` | 先把 `/etc/ld.so.preload` **截断为 0 字节**（不加载任何库 = 解除卡死），再按 `a7c2-backup/MANIFEST` 把备份复制回系统 |
+| 卡上 `a7c2-backup/` | 备份：载荷（已知可用）、`/etc/profile`；`ld.so.preload.saved` **仅作参考、永不还原**（还原武装条目会再次弄坏相机） |
+| 卡上 `a7c2-rescue.log` | 每次执行追加日志，相机存储异常时仍可读 |
+
+**覆盖范围（实测依据）**：条目指向缺失的库 ✓、条目是垃圾文本 ✓、分区写满 ✓、遗留文件 ✓ —— 可救。
+
+**救不了**：库本身致命损坏（未定义符号 / 重定位 / 构造函数错误）✗。
+实测依据：`/bin/busybox` 是**动态链接**（`interpreter /lib/ld-linux-aarch64.so.1`）、`/bin/sh` 是它的符号链接、
+`/sbin/init` 与 `/sbin/init2` 的 shebang 都是 `#!/bin/busybox sh` —— 坏库会让**每个动态程序**失败，
+于是 **init 都起不来** → 钩子永不执行 ✗。
+
+→ 该情形只能**预防**：永不把未校验的库留在武装状态（工具强制校验 SHA-256 并在会话结束中和）；
+需要持久化时优先用 `/etc/profile` 脚本（语法错误只让登录 shell 报错并继续，不会像坏库那样连 busybox 都起不来）。
+
 ## 4. 会话之后必须断电重启
 
 每次服务会话结束后相机停在 `054c:096f`（或短暂 `0336`）。**仅有拔插通常不够**：
