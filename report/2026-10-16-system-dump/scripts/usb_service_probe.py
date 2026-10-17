@@ -173,6 +173,9 @@ def main():
     parser.add_argument("--dump-to-card", metavar="DEVICE", nargs="?", const="",
                         help="Write the images onto a mounted card device on the camera "
                              "(default /dev/mmca2) and leave them there; no host transfer")
+    parser.add_argument("--install-rescue", action="store_true",
+                        help="Install the pre-brick safety net: back up files onto the card, write "
+                             "the card's rescue script, and add the mount+run hook to /etc/profile")
     parser.add_argument("--no-mount-card", action="store_true",
                         help="Do not mount the card as the first command of a command/shell "
                              "session (it is mounted by default so card-resident data works)")
@@ -227,7 +230,7 @@ def main():
         parser.error("One-shot deployment is disabled; offline tests do not establish safe camera execution")
     if (args.dump_partition or args.dump_to_card is not None or args.run_command
             or args.run_command_file or args.run_command_interactive
-            or args.shell or args.shell_script or args.mem_read):
+            or args.shell or args.shell_script or args.mem_read or args.install_rescue):
         args.deploy_shell = True
     if args.dump_to_card is not None and args.dump_partition:
         parser.error("Choose either --dump-to-card or --dump-partition")
@@ -548,6 +551,15 @@ def main():
                 extra["driver"] = memread_driver(specs, save=args.mem_read_save,
                                                  commands=args.mem_read_also,
                                                  card_only=args.mem_read_card_only)
+                nonce = None
+            elif args.install_rescue:
+                from jiritsu_shell import shell_driver
+                if kind != "shell":
+                    raise ValueError("--install-rescue needs the shell payload")
+                from jiritsu_rescue import installer_lines
+                lines = installer_lines() + [CLEANUP_COMMAND]
+                log("rescue_install_queued", lines=len(lines))
+                extra["driver"] = shell_driver(lines, interactive=False, json_path=None)
                 nonce = None
             elif args.shell or args.shell_script:
                 if kind != "shell":
