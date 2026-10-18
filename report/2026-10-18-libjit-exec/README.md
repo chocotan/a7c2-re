@@ -366,7 +366,8 @@ after : remaining: []
 A7C2 之后换到 **ILME-FX30**（电影线）试同一入口。它不是 A7C2 的换皮：型号串、固件版本号
 格式、内核构建日期都不同，所以这是**独立验证**，不能拿 A7C2 的结论外推。
 
-先做只读侦察（`analysis/fx30_probe.py`，不写任何文件）：
+先做只读侦察（独立成果：[`../2026-10-18-fx30-service-probe/`](../2026-10-18-fx30-service-probe/)，
+不写任何文件）：
 
 | 步骤 | 结果 |
 |---|---|
@@ -401,4 +402,5 @@ Linux (none) 4.9.337-scel+ #1 SMP PREEMPT Thu Dec 25 02:47:45 JST 2025 aarch64 G
    与机型无关；变的是大量存储身份。所以工具把起始 PID 做成 `--vendor-pid` 参数，
    而不是写死 `0e8a`。
 
-顺带确认：`analysis/fx30_probe.py` 的只读侦察全程没有写任何文件，也没有执行任何代码。
+顺带确认：只读侦察（`../2026-10-18-fx30-service-probe/scripts/fx30_probe.py`）全程没有写任何
+文件，也没有执行任何代码。
