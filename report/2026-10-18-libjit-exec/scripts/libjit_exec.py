@@ -260,12 +260,29 @@ class Runner:
             (self.keep_dir / name).write_bytes(data)
 
 
-def poll(runner, path, parser, seconds, interval=0.5):
-    """Poll one record file. Returns (value, raw); value is None on timeout."""
+def poll(runner, path, parser, seconds, interval=0.5, strikes=2):
+    """Poll one record file. Returns (value, raw); value is None on timeout.
+
+    A single stalled bulk transfer must not throw away a session: run4 timed out
+    while reading a status line the camera had already written (exit 0 and a
+    matching SHA-256 were in the file). Transient errors are therefore retried,
+    but only `strikes` times — a session whose replies stay missing is desynced
+    and should not be poked further.
+    """
     deadline = time.monotonic() + seconds
     raw = None
+    failures = 0
     while True:
-        raw = runner.read_path(path, 4096)
+        try:
+            raw = runner.read_path(path, 4096)
+            failures = 0
+        except Exception as exc:
+            failures += 1
+            log("poll_transient_error", path=path, attempt=failures,
+                error=f"{type(exc).__name__}: {exc}")
+            if failures > strikes:
+                raise
+            raw = None
         if raw is not None:
             value = parser(raw)
             if value is not None:
@@ -443,11 +460,16 @@ def cleanup(args):
 
     with ServiceSession(timeout=args.timeout, io_timeout=args.io_timeout,
                         unmount=args.unmount_camera_volumes) as session:
-        runner = Runner(session)
+        keep_dir = Path(args.keep).resolve() if args.keep else None
+        runner = Runner(session, keep_dir)
         before = {}
         for path in jr.TOOL_PATHS:
             data = runner.read_path(path, 4096)
             before[path] = None if data is None else len(data)
+            if data is not None and keep_dir is not None:
+                # Cleanup destroys these; save them first or the only record of
+                # a failed run is gone.
+                runner.save("about-to-delete-" + path.rsplit("/", 1)[-1] + ".bin", data)
         if before[jr.LIBJIT_PATH] is not None:
             raise SystemExit(f"{jr.LIBJIT_PATH} exists; an object is already armed")
         if runner.read_path(jr.JBUSY_PATH, 64) is not None:
@@ -513,6 +535,7 @@ def main():
     clean_parser.add_argument("--timeout", type=float, default=25.0)
     clean_parser.add_argument("--io-timeout", type=float, default=15.0)
     clean_parser.add_argument("--payload", default=str(PAYLOAD))
+    clean_parser.add_argument("--keep", help="save the files here before deleting them")
     clean_parser.add_argument("--unmount-camera-volumes", action="store_true")
     clean_parser.set_defaults(func=cleanup)
 

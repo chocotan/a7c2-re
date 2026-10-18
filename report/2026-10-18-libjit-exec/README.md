@@ -173,6 +173,9 @@ udisksctl unmount -b /dev/sdX1
 | **真机：`vfat` 挂载未带 `noexec`** | ✅ | `/dev/nflasha6 /tmp/jiritsu vfat rw,sync,dirsync,noatime,…` |
 | 证据流完整（含线路级 trace） | ✅ | `events.jsonl` 93 行 / 28 条 `jiritsu_request` |
 | **真机：从 root shell 挂 SD 卡并写读** | ✅ | `mount -t ext2 /dev/mmca2 /tmp/sd` rc=0，写入 19 B 后 `cat` 读回一致，`umount` rc=0 |
+| **真机：相机 → PC 跨通道一致** | ✅ | 相机写 19 B，宿主机 `cat` 同一文件 + SHA-256 `ecb97fdb…` 与内容摘要相同 |
+| **真机：PC → 相机跨通道一致** | ✅ | 宿主机写 30 B，相机 `cat` + `openssl dgst -sha256` 得 `cd603d31…`，与宿主机摘要相同 |
+| **真机：收尾真删** | ✅ | `cleanup` 前 4 个文件（276/36/20/238 B）→ 之后 `remaining: []` |
 
 ## 7. 风险与边界
 
@@ -313,3 +316,41 @@ UMOUNT_RC=0
 
 待补：跨通道确认（把相机切回大量存储后，在宿主机挂 `/dev/sde2` 读同一个文件），
 这是本项目对"写入"的完整判据（读回一致 + 跨通道一致）。相机侧读回已一致，跨通道待做。
+
+### 2026-10-18 · run4 · PC → 相机方向（相机侧成功，主机侧轮询失败）
+
+宿主机把 `PC-TO-A7C2-VIA-CARD-ROUNDTRIP\n`（30 B，SHA-256 `cd603d31b35db5daabb780ea152deec5502e18bb165248cb12d8a55ef1b5564b`）写进卡上 ext2 分区，
+然后 arm 一段"挂卡 + cat + openssl dgst + 卸载"的脚本。
+
+主机端当时报的是 USB 读超时（`bulk read of 12 bytes failed: USBTimeoutError`），
+但该会话的现场被 `cleanup` 抢救下来，证明**相机侧整段都成功了**：
+
+```
+MOUNT_RC=0
+-rw-r--r-- 1 root 0  30 ... /tmp/sd/libjit-pc2cam.txt
+PC-TO-A7C2-VIA-CARD-ROUNDTRIP
+SHA2-256(/tmp/sd/libjit-pc2cam.txt)= cd603d31b35db5daabb780ea152deec5502e18bb165248cb12d8a55ef1b5564b
+UMOUNT_RC=0
+```
+完成行也写了：`A7JIT001 b4f2db49 0`。摘要与宿主机侧**逐字节相同** → PC → 相机方向闭环。
+
+由此得出两条：
+
+1. **失败在主机端的轮询，不在相机**。一个 12 字节的响应头卡了 60 s（当时的 `--timeout` 同时充当 USB 超时），
+   而状态文件其实早已写好。已修：`--io-timeout` 独立（默认 15 s），且 `poll()` 对瞬时错误重试
+   `strikes=2` 次再抛 —— 但不会无限重试，回复持续缺失说明会话已失步，不该继续戳。
+2. **相机上有 `openssl`，能算 SHA-256**（`openssl dgst -sha256`），尽管没有 `md5sum`/`sha256sum`。
+   这给"相机侧摘要"提供了一条可靠判据，不必只靠 `cat` 目视。
+
+### 2026-10-18 · cleanup · 相机侧清空
+
+```
+before: request 276 B, start 36 B, status 20 B, out 238 B
+after : remaining: []
+```
+
+`cleanup` 用保留请求 `#A7JIT-CLEANUP` 让载荷自己 `unlink`，五个路径全部消失并逐个确认。
+删除前把内容存到本地 `evidence/2026-10-18-run4-leftovers/`，否则 run4 的唯一现场就没了。
+
+仍未清理：旧 preload 方案留下的 `/tmp/jiritsu/a7c2-payload.so`（70,912 B，不在本工具的文件集里）——
+下次会话一句 `--command 'rm -f /tmp/jiritsu/a7c2-payload.so'` 即可，或者把它加进清理范围。
