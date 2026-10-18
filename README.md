@@ -45,6 +45,22 @@ report/
 
 当某个模块确实被多个成果复用、且在各自目录中重复出现时，再抽到顶层 `shared/`（**当前未预置**，避免过早抽象）。
 
+## 参考项目与致谢
+
+本项目建立在以下公开工作上。**上游作者没有为本仓库的任何结论、脚本或工具背书**，也不对其他机身、
+其他固件版本的兼容性负责；本仓库对它们的引用不等于转述它们的结论。
+
+| 项目 | 本仓库用到了什么 | 没用到什么 |
+|---|---|---|
+| [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-RE)（MIT） | USB 枚举、Senser 双阶段认证、Backup 操作与备份解析。通过 `analysis/vendor/pmca-adamwuqwq` 使用提交 `3824c398c0fa`（该提交的相关源码与上游 master 逐字节一致，见 `analysis/BOOT-AND-USB-DUMP.md`） | 其 GUI 与官方更新包流程 |
+| [ma1co/fwtool.py](https://github.com/ma1co/fwtool.py) | 官方更新包的离线解包，产出整机转储用的参照文件树 | — |
+| [YuuLuo/a7c2-service-preload](https://github.com/YuuLuo/a7c2-service-preload) | A7C II 2.01 **服务认证 + 机内执行链**的公开研究，是本仓库 2026-10-16 preload 入口的出发点（见 `analysis/2026-10-15_逆向-A7C2服务预加载-report.md`） | 其载荷实现与命令通道；本仓库的 worker、邮箱与终端模式是自己重写的 |
+| [QAQLeonard/a7c2-fl23-research](https://github.com/QAQLeonard/a7c2-fl23-research) | 2026-10-18 的 **libJit 入口**：其真机结果表明"写 `/tmp/jiritsu/libJit.so` 会让固件自己 `dlopen`"值得验证。本仓库读了其提交 `dd01c07` 的源码，然后**用本项目自己的反编译证据独立复核了触发条件**，并据此实现入口（[成果](report/2026-10-18-libjit-exec/)） | 其补丁字节、色彩单元合并、安装/还原流程；与本仓库无代码派生关系，我们也没做 FL2/FL3 移植 |
+| [lzh2016zzz/a7cr-fl23-research](https://github.com/lzh2016zzz/a7cr-fl23-research) | 仅记录来源：上一条的 FL2/FL3 方法源自这里 | 本仓库未使用 |
+
+本仓库自有代码以 MIT 发布（见 [`LICENSE`](LICENSE)）。上述项目的许可证各自独立（PMCA-RE 为 MIT），
+不因本仓库的许可而被覆盖。
+
 ## 按成果查找
 
 - 想了解**方法**：直接读 `report/<成果>/README.md` 与报告正文；

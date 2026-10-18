@@ -182,9 +182,16 @@ udisksctl unmount -b /dev/sdX1
   `analysis/qemu-runtime/analysis/menu-root/usr/lib/libJiritsu.so`（其 SHA-256 与
   `analysis/evidence/jiritsu-static/sha256.txt` 一致）的反汇编，以及 `dynsyms.txt`
   全表（用于"不降权"这一项：库内没有任何 `setuid/setgid/seteuid`）。
-- 外部：[QAQLeonard/a7c2-fl23-research](https://github.com/QAQLeonard/a7c2-fl23-research)
-  —— 该项目用同一入口在真机上跑通了 4 个模块（其文档称 `euid=0`）；本目录只借用"入口"
-  这一件事，其补丁字节、色彩单元与安装流程与本成果无关。
+- 外部（入口这条线的来源，见仓库顶层 [`参考项目与致谢`](../../README.md#参考项目与致谢)）：
+  - [QAQLeonard/a7c2-fl23-research](https://github.com/QAQLeonard/a7c2-fl23-research)
+    提交 `dd01c07`：其真机结果表明"写 `/tmp/jiritsu/libJit.so` 会让固件自己 `dlopen`"值得验证。
+    本目录**只**借用"入口"这一件事；其补丁字节、色彩单元与安装流程与本成果无关，也没有代码派生关系。
+  - [YuuLuo/a7c2-service-preload](https://github.com/YuuLuo/a7c2-service-preload)：A7C II 2.01 的
+    服务认证链（`0e8a` → Senser → `0336` → 第二次认证）与机内执行思路。本目录的认证流程与该成果同源，
+    但载荷、请求构造与结果回传是本项目自己的。
+  - [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-RE)（MIT，经 `adamwuqwq` 提交 `3824c398c0fa`）：
+    主机侧 USB/Senser 传输与 `SonySenserCamera` 的 Backup 接口。本目录的帧实现复用同仓库
+    `../2026-10-16-system-dump/scripts/jiritsu_version_read.py`，其底层即这份 vendor。
 
 ## 9. 真机运行记录
 
