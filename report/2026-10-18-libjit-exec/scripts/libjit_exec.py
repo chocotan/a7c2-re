@@ -427,19 +427,56 @@ def run(args):
 
 
 def cleanup(args):
-    """Truncate this tool's work-area files after an aborted run."""
+    """Delete every file this tool leaves in the work area.
+
+    The previous version truncated them to one byte through the file API,
+    because command 0x12 (path delete) has no documented payload layout in this
+    project's evidence. That was solving the wrong problem: the payload runs as
+    root, so it can simply unlink them itself. `cleanup` therefore arms the same
+    object with the reserved cleanup request, and the proof is the absence of
+    the paths afterwards.
+    """
+    payload = Path(args.payload).resolve()
+    blob = payload.read_bytes()
+    if not blob.startswith(b"\x7fELF"):
+        raise SystemExit(f"{payload} is not an ELF object")
+
     with ServiceSession(timeout=args.timeout, io_timeout=args.io_timeout,
-                            unmount=args.unmount_camera_volumes) as session:
+                        unmount=args.unmount_camera_volumes) as session:
         runner = Runner(session)
-        for path in (jr.LIBJIT_PATH, jr.REQUEST_PATH, jr.START_PATH,
-                     jr.STATUS_PATH, jr.OUTPUT_PATH):
-            if runner.read_path(path, 4096) is None:
-                log("absent", path=path)
-                continue
-            runner.write_path(path, b"\n")
-            remaining = runner.read_path(path, 4096)
-            log("truncated", path=path, bytes=None if remaining is None else len(remaining))
-    return 0
+        before = {}
+        for path in jr.TOOL_PATHS:
+            data = runner.read_path(path, 4096)
+            before[path] = None if data is None else len(data)
+        if before[jr.LIBJIT_PATH] is not None:
+            raise SystemExit(f"{jr.LIBJIT_PATH} exists; an object is already armed")
+        if runner.read_path(jr.JBUSY_PATH, 64) is not None:
+            raise SystemExit(f"{jr.JBUSY_PATH} exists; the firmware refuses the libJit write")
+        log("before", files={p: n for p, n in before.items() if n is not None})
+
+        runner.write_path(jr.REQUEST_PATH, jr.CLEANUP_SCRIPT)
+        try:
+            runner.write_path(jr.LIBJIT_PATH, blob)
+        except Exception as exc:
+            from jiritsu_version_read import JiritsuResultError
+            if isinstance(exc, JiritsuResultError) and exc.result == jr.DLOPEN_FAILED:
+                raise SystemExit("dlopen failed; nothing was cleaned") from None
+            raise
+
+        deadline = time.monotonic() + args.timeout
+        while True:
+            after = {p: runner.read_path(p, 4096) is not None for p in jr.TOOL_PATHS}
+            if not any(after.values()):
+                log("cleanup_verified", remaining=[])
+                print(json.dumps({"before": before, "remaining": []}, ensure_ascii=False))
+                return 0
+            if time.monotonic() >= deadline:
+                remaining = [p for p, present in after.items() if present]
+                log("cleanup_incomplete", remaining=remaining)
+                print(json.dumps({"before": before, "remaining": remaining},
+                                 ensure_ascii=False))
+                return 2
+            time.sleep(0.5)
 
 
 def main():
@@ -475,6 +512,7 @@ def main():
     clean_parser = sub.add_parser("cleanup", help="delete this tool's work-area files")
     clean_parser.add_argument("--timeout", type=float, default=25.0)
     clean_parser.add_argument("--io-timeout", type=float, default=15.0)
+    clean_parser.add_argument("--payload", default=str(PAYLOAD))
     clean_parser.add_argument("--unmount-camera-volumes", action="store_true")
     clean_parser.set_defaults(func=cleanup)
 

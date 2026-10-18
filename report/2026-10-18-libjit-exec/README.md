@@ -92,7 +92,7 @@
 | `scripts/libjit_exec.py` | 主机端：双阶段认证、预检（`libJit.so`/`jbusy`/`jmode`）、装入口、轮询、取输出、收尾、事件记录；`--unmount-camera-volumes` 处理桌面自动挂载 |
 | `scripts/payload/libjit_exec.c` | 机内载荷（见第 2 节） |
 | `scripts/payload/build.sh` / `BUILD.txt` | 构建脚本与工具链记录 |
-| `scripts/payload/libjit_exec.so` | 编译产物，5,328 B，SHA-256 `395569edb00cb91d2d060064fcde9f6645e0dcf6804bbdd270e57299d66295c8` |
+| `scripts/payload/libjit_exec.so` | 编译产物，5,328 B，SHA-256 `a71fbf4f0f6afdd44b07bce0d42750b5cbad8d4c95a8b70215bd039dbfd143f9`（含清理模式，见 §5.1） |
 | `tests/` | 17 项离线测试（帧字节、路径守卫、解析器、载荷 ELF 结构、与已复核 allowlist 的一致性） |
 | `evidence/` | 第 1 节引用的反编译/反汇编原文片段；真机运行的原始记录（`start.bin`/`status.bin`/`output.bin`/`run.json`/`events.jsonl`）。**`evidence/` 被本仓库 `.gitignore` 排除**（原始证据不出库），所以下文指向它的链接在 GitHub 上不存在；关键数据已逐条内联在正文里 |
 
@@ -117,7 +117,7 @@ sh payload/build.sh                                                    # 需要 
 $PY libjit_exec.py run --command 'uname -a' --dry-run                  # 不接相机，只打印帧
 sudo $PY libjit_exec.py run --command 'cat /proc/$$/status | grep -E "^(Uid|Gid):"' \
      --keep ../evidence/$(date +%F)-run
-sudo $PY libjit_exec.py cleanup                                        # 中断后收尾（截断本工具的文件）
+sudo $PY libjit_exec.py cleanup                                        # 真删本工具留在相机上的文件
 ```
 
 会话前相机两个卷会被桌面自动挂载，必须先卸载（工具用 sysfs 祖先匹配，只会拦、不会动别的盘）：
@@ -139,6 +139,19 @@ udisksctl unmount -b /dev/sdX1
 
 批量数据不要从这条通道回传：`--max-output` 默认 256 KiB。大文件请让命令自己挂卡写
 `/tmp/sd`（相机 `/dev/mmca2`），这与本项目"批量数据一律写 SD 卡"的硬规则一致。
+
+## 5.1 收尾：真删，不是截断
+
+载荷以 root 跑，所以清理就是普通 `unlink` —— 不需要固件的按路径删除命令（`0x12`，
+其载荷布局仍不在本项目证据内）。两条规则：
+
+- **每次运行开工前**，载荷先把上一轮留下的 `start` / `status` / `out` 删掉，残留不会跨会话累积。
+- **`cleanup` 子命令**用一个保留请求 `#A7JIT-CLEANUP` 让载荷把 5 个路径（`libJit.so`、
+  `request`、`start`、`status`、`out`）全部删掉，并且**不启动 shell、不写任何记录**。
+  成功的证明就是这些路径**事后都不存在** —— 所以它不写"我做完了"这类文件（写了就等于
+  没清干净）。工具会先记录"删除前各文件字节数"，再逐个确认消失。
+
+普通用户命令无法触发这条分支：`build_script()` 拒绝以该标记开头的命令（有测试）。
 
 ## 6. 验收矩阵
 
@@ -173,9 +186,9 @@ udisksctl unmount -b /dev/sdX1
 - **不写 `/etc`、不发 DEBUG、不 remount 只读分区、不刷固件、不动原始闪存区块。**
 - 写入量：请求脚本 ≤1.8 KiB + 载荷 5.3 KiB，落在 25 MiB 的 `/tmp/jiritsu` 里；
   但注意该分区的占用是**累积**的，本工具不删除文件（见下一条），长期使用要留意。
-- **不删除文件**：分派表里确实有 `case 0x12`（`cmd_file_delete2`），但它是外部导入符号、
-  函数体不在本项目证据内，所以本工具不发送自己无法佐证的帧。收尾用"覆写即截断"
-  把 4 个临时文件压到 1 字节，并在结果的 `left_behind` 里如实列出 —— 不假装干净。
+- **不用固件的按路径删除命令**：分派表里确实有 `case 0x12`（`cmd_file_delete2`），但它是
+  外部导入符号、函数体不在本项目证据内，所以本工具不发送自己无法佐证的帧。清理改由载荷自己
+  `unlink`（它已经是 root），见 §5.1。
 
 ## 7.1 为什么不用普通 exFAT 分区做交换通道
 

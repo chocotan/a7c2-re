@@ -132,3 +132,20 @@ def test_frames_satisfy_the_reviewed_transport_allowlist():
 
     with pytest.raises(ValueError):
         jv.authorize(Transport(), (jr.select_frame(jr.LIBJIT_PATH)[:4] + b"\x01\xff\x00",))
+
+
+def test_cleanup_marker_is_reserved_and_cannot_reach_a_shell():
+    import pytest as _pytest
+    assert jr.CLEANUP_SCRIPT == b"#A7JIT-CLEANUP\n"
+    _pytest.raises(ValueError, jr.build_script, "#A7JIT-CLEANUP", "n1")
+    _pytest.raises(ValueError, jr.build_script, "  #A7JIT-CLEANUP", "n1")
+    _pytest.raises(ValueError, jr.build_script, "#A7JIT-CLEANUP; rm -rf /", "n1")
+    # The marker only counts at the start; a harmless echo of it is still allowed.
+    assert jr.build_script("echo '#A7JIT-CLEANUP'", "n1")
+
+
+def test_tool_paths_cover_every_file_the_tool_creates():
+    assert jr.LIBJIT_PATH in jr.TOOL_PATHS
+    for path in (jr.REQUEST_PATH, jr.START_PATH, jr.STATUS_PATH, jr.OUTPUT_PATH):
+        assert path in jr.TOOL_PATHS
+        assert path.startswith(jr.WORK_PREFIX)

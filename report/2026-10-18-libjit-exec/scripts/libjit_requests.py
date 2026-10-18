@@ -64,6 +64,15 @@ STATUS_PENDING = b"A7JIT000 pending\n"
 
 READ_FRAME = struct.pack("<HH", CATEGORY, CMD_READ) + b"\x00\xff\x00"
 
+# The payload treats a request starting with this marker as "delete every file
+# this tool leaves behind, start no shell". It must never reach the shell path,
+# so build_script() refuses a command that begins with it.
+CLEANUP_MARKER = "#A7JIT-CLEANUP"
+CLEANUP_SCRIPT = (CLEANUP_MARKER + "\n").encode("ascii")
+
+# Everything this tool can leave in the work area.
+TOOL_PATHS = (LIBJIT_PATH, REQUEST_PATH, START_PATH, STATUS_PATH, OUTPUT_PATH)
+
 
 def select_frame(path):
     """Build a path-selection frame, refusing anything outside the work area."""
@@ -109,6 +118,8 @@ def build_script(command, nonce, status_path=STATUS_PATH):
         raise ValueError("command must be ASCII") from None
     if "\x00" in command:
         raise ValueError("command must not contain NUL")
+    if command.lstrip().startswith(CLEANUP_MARKER):
+        raise ValueError(f"{CLEANUP_MARKER} is reserved for cleanup")
     body = command if command.endswith("\n") else command + "\n"
     script = f'{body}echo "{STATUS_TAG.decode()} {nonce} $?" > {status_path}\n'
     encoded = script.encode("ascii")

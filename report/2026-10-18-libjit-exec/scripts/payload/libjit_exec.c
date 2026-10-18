@@ -69,8 +69,16 @@ static const char SELF_PATH[]    = "/tmp/jiritsu/libJit.so";
 static const char REQUEST_PATH[] = "/tmp/jiritsu/a7c2-exec.request";
 static const char START_PATH[]   = "/tmp/jiritsu/a7c2-exec.start";
 static const char OUTPUT_PATH[]  = "/tmp/jiritsu/a7c2-exec.out";
+/* Written by the shell script's last line, not by this object; known here only
+ * so cleanup mode and the previous-run sweep can remove it. */
+static const char STATUS_PATH[]  = "/tmp/jiritsu/a7c2-exec.status";
 static const char SHELL_PATH[]   = "/bin/sh";
 static const char TAG[]          = "A7JITE01";
+/* A request that starts with this marker makes this object wipe every file the
+ * tool ever leaves in the work area and return without starting a shell. The
+ * host proves it worked by the absence of those paths, so no record is written
+ * (writing one would defeat the purpose). */
+static const char CLEANUP[]      = "#A7JIT-CLEANUP";
 
 static char request[REQUEST_MAX];
 static char record[START_MAX];
@@ -97,6 +105,17 @@ static u32 append_int(char *out, u32 at, i64 value) {
     } while (magnitude);
     while (n && at < START_MAX - 1) out[at++] = digits[--n];
     return at;
+}
+
+static int starts_with(const char *text, const char *prefix) {
+    while (*prefix) {
+        if (*text++ != *prefix++) return 0;
+    }
+    return 1;
+}
+
+static void discard(const char *path) {
+    sc(SYS_UNLINKAT, AT_FDCWD, (i64)path, 0, 0, 0, 0);
 }
 
 static void write_start_record(i64 status) {
@@ -175,6 +194,19 @@ __attribute__((visibility("default"))) void _init(void) {
         write_start_record(length ? length : -22 /* EINVAL */);
         return;
     }
+    if (starts_with(request, CLEANUP)) {
+        discard(REQUEST_PATH);
+        discard(START_PATH);
+        discard(STATUS_PATH);
+        discard(OUTPUT_PATH);
+        return;
+    }
+    /* Drop the previous run's records here rather than relying on the host to
+     * truncate them: this object is already root, and residue should not
+     * accumulate on a 25 MiB partition across sessions. */
+    discard(START_PATH);
+    discard(STATUS_PATH);
+    discard(OUTPUT_PATH);
     i64 output_fd = sc(SYS_OPENAT, AT_FDCWD, (i64)OUTPUT_PATH,
                        O_WRONLY | O_CREAT | O_TRUNC, 0644, 0, 0);
     if (output_fd < 0) {
