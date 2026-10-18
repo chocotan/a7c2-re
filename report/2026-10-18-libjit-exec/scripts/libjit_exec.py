@@ -36,6 +36,9 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
 PAYLOAD = BASE / "payload" / "libjit_exec.so"
+# Protocol-wide Senser identities: 0336 seen on ILCE-7CM2 and ILME-FX30, 02a9 is
+# the other one PMCA knows about.
+SERVICE_PIDS = (0x0336, 0x02A9)
 DEFAULT_SCRIPTS = BASE.parents[1] / "2026-10-16-system-dump" / "scripts"
 
 import libjit_requests as jr
@@ -122,10 +125,14 @@ def unmount_camera_volumes(volumes):
 class ServiceSession:
     """Two-stage authentication into the 054c:0336 service identity."""
 
-    def __init__(self, timeout=25, io_timeout=15, unmount=False):
+    def __init__(self, timeout=25, io_timeout=15, unmount=False, vendor_pid=0x0E8A):
         self.timeout = timeout          # how long to wait for the camera's state transition
         self.io_timeout = io_timeout    # per bulk transfer; a stalled reply must not eat the budget
         self.unmount = unmount
+        # The mass-storage PID differs per model (A7C2 0e8a, FX30 0e0e), while the
+        # Senser service identities are protocol-wide. Both are caller-supplied so
+        # this tool is not silently pinned to one body.
+        self.vendor_pid = vendor_pid
         self.device = None
         self.auth = None
         self.transport = None
@@ -137,6 +144,7 @@ class ServiceSession:
 
         timeout = self.timeout
         io_timeout = self.io_timeout
+        vendor_pid = self.vendor_pid
         from pmca.usb.driver.generic import GenericUsbDriver, GenericUsbException
         from pmca.usb.driver.generic.libusb import UsbBackend
 
@@ -156,8 +164,9 @@ class ServiceSession:
                         f"(errno={getattr(exc, 'errno', None)})") from exc
 
         def find(pid=None):
+            wanted = (vendor_pid, *SERVICE_PIDS)
             devices = [d for d in usb.core.find(find_all=True, idVendor=0x054C)
-                       if d.idProduct in (0x0E8A, 0x0336)]
+                       if d.idProduct in wanted]
             if pid is not None:
                 devices = [d for d in devices if d.idProduct == pid]
             if len(devices) > 1:
@@ -172,6 +181,17 @@ class ServiceSession:
                     return found
                 time.sleep(0.25)
             raise RuntimeError(f"USB identity 054c:{pid:04x} did not appear")
+
+        def wait_for_service(seconds):
+            deadline = time.monotonic() + seconds
+            while time.monotonic() < deadline:
+                for candidate in SERVICE_PIDS:
+                    found = find(candidate)
+                    if found is not None:
+                        return found
+                time.sleep(0.25)
+            raise RuntimeError(f"no Senser service identity appeared "
+                               f"(looked for {[f'{p:04x}' for p in SERVICE_PIDS]})")
 
         def open_driver(device):
             backend = DiagnosingBackend(device)
@@ -188,16 +208,16 @@ class ServiceSession:
                                "(a service session needs the volume released)")
         device = find()
         if device is None:
-            raise RuntimeError("no matching camera connected")
-        if device.idProduct == 0x0E8A:
+            raise RuntimeError(f"no 054c:{vendor_pid:04x} camera connected")
+        if device.idProduct not in SERVICE_PIDS:
             driver = open_driver(device)
             auth = SonySenserAuthDevice(driver)
             auth.start()
             auth.authenticate()
-            log("mass_storage_authentication_passed")
+            log("mass_storage_authentication_passed", pid=f"{vendor_pid:04x}")
             usb.util.dispose_resources(device)
-            device = wait_for(0x0336, timeout)
-            log("service_identity_seen")
+            device = wait_for_service(timeout)
+            log("service_identity_seen", pid=f"{device.idProduct:04x}")
         driver = open_driver(device)
         auth = SonySenserAuthDevice(driver)
         auth.start()
@@ -325,7 +345,8 @@ def run(args):
               "completed": None, "exit_status": None}
 
     with ServiceSession(timeout=args.timeout, io_timeout=args.io_timeout,
-                            unmount=args.unmount_camera_volumes) as session:
+                            unmount=args.unmount_camera_volumes,
+                            vendor_pid=args.vendor_pid) as session:
         runner = Runner(session, keep_dir)
 
         existing = runner.read_path(jr.LIBJIT_PATH, 4096)
@@ -459,7 +480,8 @@ def cleanup(args):
         raise SystemExit(f"{payload} is not an ELF object")
 
     with ServiceSession(timeout=args.timeout, io_timeout=args.io_timeout,
-                        unmount=args.unmount_camera_volumes) as session:
+                        unmount=args.unmount_camera_volumes,
+                        vendor_pid=args.vendor_pid) as session:
         keep_dir = Path(args.keep).resolve() if args.keep else None
         runner = Runner(session, keep_dir)
         before = {}
@@ -506,6 +528,9 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--scripts", help="directory holding jiritsu_version_read.py")
     parser.add_argument("--pmca", help="directory holding the vendored pmca package")
+    parser.add_argument("--vendor-pid", default="0x0e8a",
+                        help="mass-storage USB product id of the target (default 0x0e8a; "
+                             "ILME-FX30 is 0x0e0e)")
     sub = parser.add_subparsers(dest="command_name", required=True)
 
     run_parser = sub.add_parser("run", help="run one command through the libJit entry")
@@ -540,6 +565,7 @@ def main():
     clean_parser.set_defaults(func=cleanup)
 
     args = parser.parse_args()
+    args.vendor_pid = int(str(args.vendor_pid), 16)
     resolve_paths(args.scripts, args.pmca,
                   require_pmca=not getattr(args, "dry_run", False))
 

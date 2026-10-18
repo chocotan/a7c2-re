@@ -25,7 +25,7 @@
 
 | 日期 | 成果 | 一句话 |
 |---|---|---|
-| 2026-10-18 | [libJit 执行入口（真机已验证）](report/2026-10-18-libjit-exec/) | 改用固件自身对 `/tmp/jiritsu/libJit.so` 的 `dlopen` 取得 root 命令执行：**不写 `/etc/ld.so.preload`、不发 DEBUG、会话后无残留**；真机 `Uid: 0 0 0 0`，可从该 shell 挂卡并写读 |
+| 2026-10-18 | [libJit 执行入口（两台真机已验证）](report/2026-10-18-libjit-exec/) | 改用固件自身对 `/tmp/jiritsu/libJit.so` 的 `dlopen` 取得 root 命令执行：**不写 `/etc/ld.so.preload`、不发 DEBUG、会话后无残留**；已在 **ILCE-7CM2 2.01** 与 **ILME-FX30** 上验证 `Uid: 0 0 0 0`，可从该 shell 挂卡并写读 |
 | 2026-10-17 | [原生 QEMU 相机实验（进行中）](report/2026-10-17-qemu-native-camera/) | 原固件菜单、原生窗口、9项操作、日期初始化修复及原Fsys虚拟写盘已验收；完整主界面/成像/拍照录像未完成。见[阶段进展](report/2026-10-17-qemu-native-camera/STATUS.md) |
 | 2026-10-16 | [整机固件转储](report/2026-10-16-system-dump/) | 19 个闪存分区 / 1.80 GiB 一次会话转储完成，三重独立验证通过；关键机制是分区的**密文/明文双视图**与"预加载注入 + DEBUG 触发点"取得 root |
 
