@@ -87,7 +87,8 @@ sudo ./.venv/bin/python memread.py --phys 0x400000000 --size 0x1000 --save dram-
 实测（真机）：`cd /tmp/jiritsu` 后 `pwd` 返回 `/tmp/jiritsu`，`X=42; export X` 后 `echo $X` 返回 `42`。
 
 操作细节：工具会**自动卸载桌面挂载的相机卷**（服务会话要求卷未挂载）；会话结束后相机会停在
-`054c:096f`，需**断电重启**相机才能再次连接——工具会检测并给出这句提示。
+`054c:096f`。恢复代价取决于主机操作系统：**Windows 需断电重启**，**Linux 重新插拔即可**——
+工具会检测并给出这句提示。
 命令输出与每条命令的退出码打印在 **stderr**（服务 CLI 的 JSON 事件流占用 stdout）。
 实测：非零退出码（相机无 `id` applet 时的 `EXIT 127`）被正确报告。
 

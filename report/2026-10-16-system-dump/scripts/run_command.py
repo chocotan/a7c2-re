@@ -68,7 +68,8 @@ def camera_state_hint():
     The camera keeps the mode a finished session left it in, so a plain replug often
     brings it back as 096f/0336 and the session cannot start. Saying which mode it is
     in — and that a power cycle is what clears it — is the difference between a
-    usable tool and a cryptic "no matching camera connected".
+    usable tool and a cryptic "no matching camera connected". How it gets cleared is
+    host-dependent: Windows needs a power cycle, Linux a replug (2026-10-18 note).
     """
     listing = subprocess.run(["lsusb", "-d", "054c:"], capture_output=True, text=True).stdout
     if not listing.strip():
@@ -84,8 +85,8 @@ def hint_message():
     for pid, what in STICKY_MODES.items():
         if f":{pid}" in listing:
             return (f"检测到 054c:{pid}（{what}）✗，服务会话需要 054c:{MSC_PID}。"
-                    "请**把相机断电重启**（关机再开机）后重新连接 USB —— 仅拔插通常不够，"
-                    "相机会保持上一次会话残留的模式")
+                    "恢复办法取决于主机：Windows 上请**断电重启**（关机再开机）后重新连接 USB；"
+                    "Linux 上**重新插拔 USB 即可**（偶尔要先插一次回到 0336，再插一次）")
     return f"检测到相机，但身份不是 054c:{MSC_PID}（见 lsusb -d 054c: 输出）"
 
 

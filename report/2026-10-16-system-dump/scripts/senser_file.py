@@ -141,7 +141,7 @@ def main(argv=None):
     devices = find_devices(MSC_PID) or [d for d in find_devices() if d.idProduct in SERVICE_PIDS]
     if len(devices) != 1:
         print("未检测到可用相机：需要 054c:0e8a（海量存储）或 054c:0336/02a9（服务模式）；"
-              "若停在 096f 请断电重启", file=sys.stderr)
+              "若停在 096f：Linux 重新插拔 USB，Windows 需断电重启", file=sys.stderr)
         return 3
     if not args.yes:
         reply = input(f"  将对相机执行 {[n for n in ('read','write','delete') if getattr(args, n)][0]} "
