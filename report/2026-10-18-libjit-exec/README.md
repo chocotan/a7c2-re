@@ -127,6 +127,10 @@ lsblk -o NAME,LABEL,MOUNTPOINT | grep -E "A7C2CAM|PMHOME"
 udisksctl unmount -b /dev/sdX1
 ```
 
+`--keep <dir>` 只决定**本地**证据写到哪里（事件流、相机侧文件副本、命令输出）；相机侧的
+`a7c2-exec.*` 默认在收尾时被截到 1 字节，不会给你留垃圾。只有需要现场时才加
+`--leave-on-camera`。
+
 退出码：`0` 成功，`2` 模块根本没运行（看事件流里的 `dlopen_failed`），
 `3` 模块运行了但命令未完成，`4` 命令返回非零。标准输出是命令的原始输出，事件流（JSON）走标准错误。
 
@@ -172,6 +176,25 @@ udisksctl unmount -b /dev/sdX1
 - **不删除文件**：分派表里确实有 `case 0x12`（`cmd_file_delete2`），但它是外部导入符号、
   函数体不在本项目证据内，所以本工具不发送自己无法佐证的帧。收尾用"覆写即截断"
   把 4 个临时文件压到 1 字节，并在结果的 `left_behind` 里如实列出 —— 不假装干净。
+
+## 7.1 为什么不用普通 exFAT 分区做交换通道
+
+真机实测（2026-10-16，root shell 里抓的）：
+
+```
+/proc/filesystems:  ext2  squashfs  vfat  fuseblk  /  nodev fuse, fusectl  ← 无 exfat、无 ext4
+mount -t exfat -o ro /dev/mmca1 /tmp/sdtest   → EXFAT_FAIL
+mount -t vfat  -o ro /dev/mmca1 /tmp/sdtest   → VFAT_FAIL
+```
+
+`sys_mount` 也是同一个 `mount(2)`，内核按 fstype 查注册表分派；表里没有 exfat handler，
+busybox `mount`、`sys_mount`、厂商的 `Fsys_Mount` 都一样失败。相机能读写 exFAT 卡是因为
+**PrFILE2 在用户态直接对块设备做原始 I/O，不经过 mount**（`/sbin/initrc/fstab` 里也没有
+任何 SD 卡条目）。内核虽有 `fuse`/`fuseblk`，但相机上没有 exfat-fuse 那个用户态程序。
+
+所以：shell 路线要读写卡，只能走 ext2 分区（`/dev/mmca2`）；想写 exFAT 分区得回到主机端的
+固件 SD 文件 API（`cmd 0x0f`/`0x10`，mode `0x01`），那条
+[`../2026-10-16-system-dump/`](../2026-10-16-system-dump/) 已经验证过三方 SHA-256 一致。
 
 ## 8. 参考
 

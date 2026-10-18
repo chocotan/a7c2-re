@@ -122,8 +122,9 @@ def unmount_camera_volumes(volumes):
 class ServiceSession:
     """Two-stage authentication into the 054c:0336 service identity."""
 
-    def __init__(self, timeout=25, unmount=False):
-        self.timeout = timeout
+    def __init__(self, timeout=25, io_timeout=15, unmount=False):
+        self.timeout = timeout          # how long to wait for the camera's state transition
+        self.io_timeout = io_timeout    # per bulk transfer; a stalled reply must not eat the budget
         self.unmount = unmount
         self.device = None
         self.auth = None
@@ -135,6 +136,7 @@ class ServiceSession:
         from pmca.usb.sony import SonySenserAuthDevice, SonySenserDevice, SonySenserCamera
 
         timeout = self.timeout
+        io_timeout = self.io_timeout
         from pmca.usb.driver.generic import GenericUsbDriver, GenericUsbException
         from pmca.usb.driver.generic.libusb import UsbBackend
 
@@ -143,7 +145,7 @@ class ServiceSession:
 
             def __init__(self, device):
                 super().__init__(device)
-                self.dev.default_timeout = max(1000, int(timeout * 1000))
+                self.dev.default_timeout = max(1000, int(io_timeout * 1000))
 
             def read(self, ep, length, timeout=None):
                 try:
@@ -305,7 +307,8 @@ def run(args):
               "command": args.command, "armed": False, "module_ran": False,
               "completed": None, "exit_status": None}
 
-    with ServiceSession(timeout=args.timeout, unmount=args.unmount_camera_volumes) as session:
+    with ServiceSession(timeout=args.timeout, io_timeout=args.io_timeout,
+                            unmount=args.unmount_camera_volumes) as session:
         runner = Runner(session, keep_dir)
 
         existing = runner.read_path(jr.LIBJIT_PATH, 4096)
@@ -323,6 +326,15 @@ def run(args):
                              "Do not remove it by hand without knowing why it is there")
         runner._record("jbusy_absent")
         runner._record("jmode_state", present=runner.read_path(jr.JMODE_PATH, 64) is not None)
+        if keep_dir is not None:
+            # The arm below truncates these; a failed run's only crime scene is
+            # here, so copy it out first instead of destroying the evidence.
+            for name, path in (("previous-request", jr.REQUEST_PATH),
+                               ("previous-start", jr.START_PATH),
+                               ("previous-status", jr.STATUS_PATH),
+                               ("previous-output", jr.OUTPUT_PATH)):
+                runner.save(name + ".bin", runner.read_path(path, 65536))
+            runner._record("previous_run_preserved", directory=str(keep_dir))
 
         # Truncate the records this run will read back, so a stale line from an
         # earlier run cannot be mistaken for this one.
@@ -384,7 +396,7 @@ def run(args):
         # expected state whether or not the rest of it worked.
         result["libjit_remaining"] = runner.read_path(jr.LIBJIT_PATH, 4096) is not None
         result["jmode_after"] = runner.read_path(jr.JMODE_PATH, 64) is not None
-        if not args.keep:
+        if not args.leave_on_camera:
             # Cleanup uses overwrite-truncation, not a delete command: case 0x12
             # (cmd_file_delete2) exists in the dispatcher, but its payload layout
             # is not in this project's decompiled evidence, so this tool does not
@@ -416,7 +428,8 @@ def run(args):
 
 def cleanup(args):
     """Truncate this tool's work-area files after an aborted run."""
-    with ServiceSession(timeout=args.timeout, unmount=args.unmount_camera_volumes) as session:
+    with ServiceSession(timeout=args.timeout, io_timeout=args.io_timeout,
+                            unmount=args.unmount_camera_volumes) as session:
         runner = Runner(session)
         for path in (jr.LIBJIT_PATH, jr.REQUEST_PATH, jr.START_PATH,
                      jr.STATUS_PATH, jr.OUTPUT_PATH):
@@ -442,12 +455,17 @@ def main():
                             help="ELF shared object to load (default: payload/libjit_exec.so)")
     run_parser.add_argument("--timeout", type=float, default=60.0,
                             help="seconds to wait for the command to finish (default 60)")
+    run_parser.add_argument("--io-timeout", type=float, default=15.0,
+                            help="per USB transfer timeout in seconds (default 15)")
     run_parser.add_argument("--start-timeout", type=float, default=15.0,
                             help="seconds to wait for the module's own record (default 15)")
     run_parser.add_argument("--max-output", type=int, default=262144,
                             help="output readback limit in bytes (default 256 KiB); "
                                  "write larger data to the SD card instead")
-    run_parser.add_argument("--keep", help="keep evidence and the camera-side files here")
+    run_parser.add_argument("--keep", help="write the run's evidence (events, records, output) here")
+    run_parser.add_argument("--leave-on-camera", action="store_true",
+                            help="skip the end-of-run truncation of this tool's work-area files; "
+                                 "use only when you need the camera-side files for diagnosis")
     run_parser.add_argument("--unmount-camera-volumes", action="store_true",
                             help="unmount this camera's auto-mounted volumes before connecting")
     run_parser.add_argument("--dry-run", action="store_true",
@@ -456,6 +474,7 @@ def main():
 
     clean_parser = sub.add_parser("cleanup", help="delete this tool's work-area files")
     clean_parser.add_argument("--timeout", type=float, default=25.0)
+    clean_parser.add_argument("--io-timeout", type=float, default=15.0)
     clean_parser.add_argument("--unmount-camera-volumes", action="store_true")
     clean_parser.set_defaults(func=cleanup)
 
