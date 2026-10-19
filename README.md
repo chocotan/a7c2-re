@@ -25,6 +25,7 @@
 
 | 日期 | 成果 | 一句话 |
 |---|---|---|
+| 2026-10-19 | [SSH 可行性调研与实测：交互式 root shell](report/2026-10-19-ssh-feasibility/) | 原厂 22 端口只做受限转发（`MaxSessions 0`）；用 libJit 入口在 **2222** 起独立 sshd（仅密钥）并实测登录 `Uid: 0 0 0 0`。根因是 `root` 的登录 shell 为 `/bin/false`；唯一持久改动是改成 `/bin/sh`（已备份、有还原步骤） |
 | 2026-10-18 | [跨机型验证：Senser/Jiritsu 链](report/2026-10-18-fx30-service-probe/) | 只读侦察证明这条链是**协议级**而非机型级的：大量存储 PID 随机型变（`0e8a`/`0e0e`），Senser 服务身份恒为 `0336`；已在 ILME-FX30 上验证 |
 | 2026-10-18 | [libJit 执行入口（两台真机已验证）](report/2026-10-18-libjit-exec/) | 改用固件自身对 `/tmp/jiritsu/libJit.so` 的 `dlopen` 取得 root 命令执行：**不写 `/etc/ld.so.preload`、不发 DEBUG、会话后无残留**；已在 **ILCE-7CM2 2.01** 与 **ILME-FX30** 上验证 `Uid: 0 0 0 0`，可从该 shell 挂卡并写读 |
 | 2026-10-17 | [原生 QEMU 相机实验（进行中）](report/2026-10-17-qemu-native-camera/) | 原固件菜单、原生窗口、9项操作、日期初始化修复及原Fsys虚拟写盘已验收；完整主界面/成像/拍照录像未完成。见[阶段进展](report/2026-10-17-qemu-native-camera/STATUS.md) |
