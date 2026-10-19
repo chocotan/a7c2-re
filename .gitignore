@@ -9,3 +9,6 @@ output/
 *.zip
 *.tar
 *.tar.gz
+
+# 研究用 SSH 私钥（不提交）
+keys/
