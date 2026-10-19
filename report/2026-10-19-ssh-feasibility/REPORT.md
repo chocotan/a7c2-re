@@ -2,6 +2,9 @@
 
 日期：2026-10-19。范围见 [scope.md](scope.md)。本报告采用普通技术调研结构，`flavor = null`。
 
+本成果的文档导航见 [README.md](README.md)。共享库损坏时的网络容错证据已合并为
+[SO-CORRUPTION-WIFI.md](SO-CORRUPTION-WIFI.md)；该附篇仅分析故障边界，不能据此保证 SSH 可用于救援。
+
 ## 1. 结论
 
 **原厂固件已经包含 SSH 服务；在已授权的本机研究环境中，交互式 SSH 终端已经实测打通（root）。**
@@ -12,7 +15,7 @@
 需要区分三件事：原厂 22 端口服务**仍然**只做受限转发（`MaxSessions 0`、`PermitRootLogin no`、
 无公钥/密码认证），本轮的登录能力来自我们自己的实例，而不是原厂配置被放宽。
 另外，`root` 账户的登录 shell 原为 `/bin/false`，本轮把它改成 `/bin/sh` 才能得到交互 shell ——
-这是本次唯一持久化的改动，见 §8。
+这是本次持久化账户修改，部署产生的其他文件与目录见 §8 及 [README.md](README.md)。
 
 关键限制是原厂配置的 **`MaxSessions 0`**：按 OpenSSH 语义，它禁止 shell、命令执行和 SFTP 等子系统会话，同时允许转发。
 配置还将转发目标限定为两个本机端口，禁止 root 登录和公钥认证。
@@ -20,7 +23,7 @@
 
 离线调研后，用户提供相机 Wi-Fi 地址并授权测试。本轮追加的单次检查结果是：**ping 成功，TCP 22 返回 `Connection refused`，未取得 SSH banner**。
 说明该地址当前可达，但 22 端口未接受连接；无法仅凭这一结果区分没有监听与主动拒绝规则。
-没有登录、启动服务或修改相机，也没有构建或运行部署工具。
+上述初期检查没有登录、启动服务或修改相机；后续授权部署与登录实测另见 §8。
 
 ## 2. 已核实的基础
 
@@ -193,7 +196,7 @@ sha256sum analysis/extracted/firmware/0800_appli/tmp/ssh/sshd_config
 
 原始 FAT 配置比对使用项目已有的 fwtool 读取器，打开方式为 `rb`，没有安装新依赖或挂载文件系统。
 
-## 8. 实测结果与唯一持久化改动
+## 8. 实测结果与持久写入记录
 
 ### 8.1 已完成
 
@@ -230,8 +233,10 @@ sshd:*:77:77:sshd:/var/run/sshd:/bin/false
 
 ### 8.3 持久化改动与还原
 
-**本次唯一写入非易失分区的内容**是 `/etc/passwd` 中 `root` 行的 shell 字段
-（`/etc` 位于 12 MiB 的 nflasha10）。改动前后的 SHA-256：
+账户修改是 `/etc/passwd` 中 `root` 行的 shell 字段
+（`/etc` 位于 12 MiB 的 nflasha10）。此外部署曾写入 `/tmp/jiritsu` 下的载荷、邮箱、
+备份和首次密钥尝试残留，并创建 `/var/empty`；不能把这些统称为 RAM 内容或无持久写入。
+以下记录的是账户文件改动前后的 SHA-256：
 
 | 文件 | SHA-256 |
 |---|---|
