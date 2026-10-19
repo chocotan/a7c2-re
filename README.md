@@ -25,6 +25,7 @@
 
 | 日期 | 成果 | 一句话 |
 |---|---|---|
+| 2026-10-19 | [某个 `.so` 损坏后 WiFi 还能不能起来](report/2026-10-19-so-corruption-wifi/) | `im.elf` 的装载器不把模块加载失败当致命（`dlopen`/`dlsym` 失败只返回 -1/-2），且网络阶段先于应用阶段，所以 `appFw.so` 干净加载失败时 WiFi 仍能初始化；但 `DT_INIT` 崩溃会连带杀死同进程的网络线程 |
 | 2026-10-19 | [SSH 可行性调研与实测：交互式 root shell](report/2026-10-19-ssh-feasibility/) | 原厂 22 端口只做受限转发（`MaxSessions 0`）；用 libJit 入口在 **2222** 起独立 sshd（仅密钥）并实测登录 `Uid: 0 0 0 0`。根因是 `root` 的登录 shell 为 `/bin/false`；唯一持久改动是改成 `/bin/sh`（已备份、有还原步骤） |
 | 2026-10-18 | [跨机型验证：Senser/Jiritsu 链](report/2026-10-18-fx30-service-probe/) | 只读侦察证明这条链是**协议级**而非机型级的：大量存储 PID 随机型变（`0e8a`/`0e0e`），Senser 服务身份恒为 `0336`；已在 ILME-FX30 上验证 |
 | 2026-10-18 | [libJit 执行入口（两台真机已验证）](report/2026-10-18-libjit-exec/) | 改用固件自身对 `/tmp/jiritsu/libJit.so` 的 `dlopen` 取得 root 命令执行：**不写 `/etc/ld.so.preload`、不发 DEBUG、会话后无残留**；已在 **ILCE-7CM2 2.01** 与 **ILME-FX30** 上验证 `Uid: 0 0 0 0`，可从该 shell 挂卡并写读 |
