@@ -26,7 +26,7 @@
 | 日期 | 成果 | 一句话 |
 |---|---|---|
 | 2026-10-19 | [CMOS 输入能否从某个进程拿到](report/2026-10-19-cmos-input-path/) | 无 V4L2；帧经 `stream2` 的物理页 `mmap` + DMM/EE 缓冲进入 `im.elf` 进程，已证实的通路只给 **JPEG/NV12**，未见 RAW/Bayer；传感器归属未确证 |
-| 2026-10-19 | [SSH 实测与共享库故障下的网络可用性](report/2026-10-19-ssh-feasibility/) | 独立 **2222** 端口、仅密钥的 root SSH 已实测，含账户改动及还原记录；合并 `.so` 损坏的离线容错研究：加载失败可继续，未恢复崩溃可能终止同进程网络控制线程，不保证故障后自动联网或 SSH 救援 |
+| 2026-10-19 | [SSH 与共享库故障：统一研究报告](report/2026-10-19-ssh-feasibility/REPORT.md) | §1–§8：独立 **2222** 端口的 root SSH 实测、写入与还原记录；§9：`.so` 损坏后的 Wi-Fi／SSH 可用性。两项正文已合为一份报告；故障后的自动联网与 SSH 救援未验证 |
 | 2026-10-18 | [跨机型验证：Senser/Jiritsu 链](report/2026-10-18-fx30-service-probe/) | 只读侦察证明这条链是**协议级**而非机型级的：大量存储 PID 随机型变（`0e8a`/`0e0e`），Senser 服务身份恒为 `0336`；已在 ILME-FX30 上验证 |
 | 2026-10-18 | [libJit 执行入口（两台真机已验证）](report/2026-10-18-libjit-exec/) | 改用固件自身对 `/tmp/jiritsu/libJit.so` 的 `dlopen` 取得 root 命令执行：**不写 `/etc/ld.so.preload`、不发 DEBUG、会话后无残留**；已在 **ILCE-7CM2 2.01** 与 **ILME-FX30** 上验证 `Uid: 0 0 0 0`，可从该 shell 挂卡并写读 |
 | 2026-10-17 | [原生 QEMU 相机实验（进行中）](report/2026-10-17-qemu-native-camera/) | 原固件菜单、原生窗口、9项操作、日期初始化修复及原Fsys虚拟写盘已验收；完整主界面/成像/拍照录像未完成。见[阶段进展](report/2026-10-17-qemu-native-camera/STATUS.md) |
