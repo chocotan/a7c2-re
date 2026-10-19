@@ -263,16 +263,32 @@ cp /tmp/jiritsu/passwd.orig /etc/passwd
 启动/停止 2222 实例 → 登录探测）。每次调用消耗一次 USB 会话，**调用前需拔插 USB**
 （会话结束后相机停在 `054c:096f`）。
 
+脚本不内置任何主机路径、相机地址或密钥，全部由调用方提供：
+
+| 变量 | 作用 | 默认 |
+|---|---|---|
+| `A7C2_HOST` | 相机在局域网里的地址（必填） | 无 |
+| `A7C2_SSH_KEY` | 客户端私钥路径 | `~/.ssh/a7c2-camera` |
+| `A7C2_PYTHON` | 带 `pyusb` + `Cryptodome` 的解释器 | 仓库内 `analysis/.venv/bin/python` |
+
+仓库根目录、libJit 工具路径、相机卷的卸载目标都由脚本自己推导或按卷标匹配，
+不写死具体机器。
+
+```sh
+A7C2_HOST=<相机地址> final/a7c2-re/report/2026-10-19-ssh-feasibility/ssh-camera.sh start
+```
+
+密钥对在首次运行时由脚本用 `ssh-keygen` 现场生成（ed25519），**默认落在 `~/.ssh/`，不进仓库**；
+只有公钥会被写进相机的 `authorized_keys`。也可以事先自备密钥并用 `A7C2_SSH_KEY` 指定。
 登录命令：
 
 ```sh
-ssh -i final/a7c2-re/report/2026-10-19-ssh-feasibility/keys/id_ed25519 \
-    -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    -p 2222 root@192.168.31.194
+ssh -i ~/.ssh/a7c2-camera -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null -p 2222 root@<相机地址>
 ```
 
-sshd 与密钥都在 tmpfs，**重启即消失**；`/etc/passwd` 的改动则保留。
-`keys/id_ed25519` 是研究用私钥，不应提交或外传。
+sshd 与它的主机密钥都在 tmpfs，**重启即消失**；`/etc/passwd` 的改动则保留。
+交互 shell 需要 `root` 的登录 shell 已经是 `/bin/sh`（§8.2/§8.3）；脚本本身不改 `passwd`。
 
 ### 8.5 仍未验收
 

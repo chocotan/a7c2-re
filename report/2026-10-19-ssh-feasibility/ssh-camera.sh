@@ -1,21 +1,47 @@
 #!/bin/bash
-# Start/stop the research sshd on an ILCE-7CM2 (firmware 2.01).
+# Start/stop a research sshd on an ILCE-7CM2 (firmware tested: 2.01).
 #
-# Prerequisite: USB Connection set to Mass Storage, camera volumes unmounted,
-# camera at 054c:0e8a. Each run consumes one USB session, so the camera must be
-# re-plugged before every invocation (it ends up at 054c:096f).
+# Generic: no host-specific paths, IPs or keys are baked in.
+#   A7C2_HOST       camera address on the LAN            (required)
+#   A7C2_SSH_KEY    client key path      (default ~/.ssh/a7c2-camera)
+#   A7C2_PYTHON     python with pyusb+Cryptodome         (default: repo venv)
+#   A7C2_PMCA       vendored PMCA-RE checkout            (default: repo vendor)
 #
-# The sshd instance uses its own config on tmpfs (/tmp_network/a7c2ssh), port
-# 2222, key-only auth, UsePAM off. The vendor /etc/ssh/sshd_config and port 22
-# are never touched.
+# A key pair is generated on first use if A7C2_SSH_KEY does not exist; only the
+# public half ever reaches the camera.
+#
+# Prerequisites: USB Connection set to Mass Storage, camera volumes unmounted,
+# camera at 054c:0e8a. Each run consumes one USB session, so re-plug the camera
+# before every invocation (it ends up at 054c:096f).
+#
+# The instance uses its own config on tmpfs (/tmp_network/a7c2ssh), port 2222,
+# key-only auth, UsePAM off. The vendor /etc/ssh/sshd_config and port 22 are
+# never touched. It writes no persistent state; /etc/passwd is NOT modified here
+# (see REPORT.md for why root's login shell must already be /bin/sh).
 set -u
-cd /home/choco/Downloads/20261009sony7c2 || exit 1
-HERE=final/a7c2-re/report/2026-10-19-ssh-feasibility
-PY=/home/choco/Downloads/20261009sony7c2/analysis/.venv/bin/python
-SCRIPTS=final/a7c2-re/report/2026-10-18-libjit-exec/scripts
-KEY="$HERE/keys/id_ed25519"
-HOST=192.168.31.194
-PUB=$(cat "$HERE/keys/id_ed25519.pub")
+
+HERE=$(cd -- "$(dirname -- "$0")" && pwd)
+ROOT=$(cd -- "$HERE/../../../.." && pwd)
+LIBJIT="$ROOT/final/a7c2-re/report/2026-10-18-libjit-exec/scripts"
+KEY=${A7C2_SSH_KEY:-$HOME/.ssh/a7c2-camera}
+PORT=2222
+
+die() { echo "$*" >&2; exit 1; }
+
+resolve_python() {
+  if [ -n "${A7C2_PYTHON:-}" ]; then echo "$A7C2_PYTHON"; return; fi
+  if [ -x "$ROOT/analysis/.venv/bin/python" ]; then echo "$ROOT/analysis/.venv/bin/python"; return; fi
+  command -v python3 || die "no python3; set A7C2_PYTHON"
+}
+
+ensure_key() {
+  if [ ! -f "$KEY" ]; then
+    mkdir -p "$(dirname -- "$KEY")"
+    ssh-keygen -t ed25519 -N '' -C "a7c2-camera" -f "$KEY" >/dev/null || die "ssh-keygen failed"
+    echo "generated client key: $KEY" >&2
+  fi
+  PUB=$(cat "$KEY.pub")
+}
 
 wait_device() {
   echo "waiting for 054c:0e8a (re-plug the camera) ..."
@@ -23,21 +49,25 @@ wait_device() {
     lsusb | grep -q '054c:0e8a' && { echo "device present"; return 0; }
     sleep 3
   done
-  echo "NOT_MASS_STORAGE_ABORT"; lsusb | grep -i 054c; return 1
+  die "camera is not in mass-storage mode: $(lsusb | grep -i 054c || echo 'no Sony USB device')"
 }
 
 unmount_volumes() {
-  for m in /run/media/choco/A7C2CAM /run/media/choco/PMHOME; do
-    mountpoint -q "$m" && sudo udisksctl unmount -b "$(findmnt -n -o SOURCE --target "$m")"
-  done
-  lsblk -o NAME,LABEL,MOUNTPOINT | grep -iE 'A7C2|PMHOME' || echo "UNMOUNTED_OK"
+  local source mountpoint
+  while read -r mountpoint; do
+    [ -n "$mountpoint" ] || continue
+    source=$(findmnt -n -o SOURCE --target "$mountpoint") || continue
+    sudo udisksctl unmount -b "$source" || echo "UNMOUNT_FAIL $mountpoint" >&2
+  done < <(lsblk -o MOUNTPOINT,LABEL --noheadings 2>/dev/null |
+           awk '$2 ~ /^(A7C2CAM|PMHOME)$/ {print $1}')
+  lsblk -o NAME,LABEL,MOUNTPOINT --noheadings 2>/dev/null |
+    awk '$2 ~ /^(A7C2CAM|PMHOME)$/ && $3 != "" {print "still mounted: "$0}' || true
 }
 
-run_guest() {  # $1 = shell command, $2 = evidence tag
-  cd "$SCRIPTS" || exit 1
-  sudo "$PY" libjit_exec.py run --keep "$HERE/evidence/$(date +%F)-$2" \
-    --max-output 65536 --command "$1" 2>&1 | grep -v '"event": "jiritsu_' | tail -40
-  cd - >/dev/null || exit 1
+run_guest() {  # $1 = guest shell command, $2 = evidence tag
+  ( cd "$LIBJIT" && sudo "$(resolve_python)" libjit_exec.py run \
+      --keep "$HERE/evidence/$(date +%F)-$2" --max-output 65536 --command "$1" ) \
+    2>&1 | grep -v '"event": "jiritsu_' | tail -40
 }
 
 read -r -d '' GUEST_START <<'EOS'
@@ -80,24 +110,38 @@ ls -d $D /var/empty 2>&1
 EOS
 
 cmd_start() {
-  wait_device || exit 1
+  wait_device
   unmount_volumes
+  ensure_key
   run_guest "${GUEST_START/__PUBKEY__/$PUB}" start
-  sleep 2
   echo "=== login probe ==="
-  timeout 25 ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    -o IdentitiesOnly=yes -o BatchMode=yes -o LogLevel=ERROR -o ConnectTimeout=8 \
-    -p 2222 root@"$HOST" 'cat /proc/$$/status | grep -E "^(Uid|Gid):"' && echo "SSH_OK"
+  sleep 2
+  ssh -i "$KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR \
+      -o ConnectTimeout=8 -p "$PORT" root@"$HOST" \
+      'cat /proc/$$/status | grep -E "^(Uid|Gid):"' && echo "SSH_OK"
 }
 
 cmd_stop() {
-  wait_device || exit 1
+  wait_device
   unmount_volumes
   run_guest "$GUEST_STOP" stop
 }
 
-case "${1:-}" in
+HOST=${A7C2_HOST:-}
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -H|--host) HOST=${2:-}; shift 2 ;;
+    start|stop) ACTION=$1; shift ;;
+    *) die "usage: A7C2_HOST=<camera-ip> $0 {start|stop}" ;;
+  esac
+done
+
+[ -n "${ACTION:-}" ] || die "usage: A7C2_HOST=<camera-ip> $0 {start|stop}"
+[ -n "$HOST" ] || die "set A7C2_HOST=<camera-ip> (or pass -H <ip>)"
+[ -d "$LIBJIT" ] || die "libJit deliverable not found: $LIBJIT"
+
+case "$ACTION" in
   start) cmd_start ;;
   stop)  cmd_stop ;;
-  *) echo "usage: $0 {start|stop}"; exit 2 ;;
 esac
