@@ -25,6 +25,7 @@
 
 | 日期 | 成果 | 一句话 |
 |---|---|---|
+| 2026-10-21 | [固件开发者/工程模式体系调查](report/2026-10-21-developer-modes/REPORT.md) | dmode/preload/console 解锁/updater 工程模式/senser 命令面全部静态理清；USB 服务模式不能开开发者模式（DBG_MODE 被拒），可靠路径是 libJit root 直写 `/setting`；updater 各模式均不绕签名、dat3 与语言解锁无调用链；preload 为 4 路径白名单，KMC ICE/LIQUID/gdb/nounified 均为死代码 |
 | 2026-10-19 | [CMOS 输入能否从某个进程拿到](report/2026-10-19-cmos-input-path/) | 无 V4L2；帧经 `stream2` 的物理页 `mmap` + DMM/EE 缓冲进入 `im.elf` 进程，已证实的通路只给 **JPEG/NV12**，未见 RAW/Bayer；传感器归属未确证 |
 | 2026-10-19 | [SSH 与共享库故障：统一研究报告](report/2026-10-19-ssh-feasibility/REPORT.md) | §1–§8：独立 **2222** 端口的 root SSH 实测、写入与还原记录；§9：`.so` 损坏后的 Wi-Fi／SSH 可用性。两项正文已合为一份报告；故障后的自动联网与 SSH 救援未验证 |
 | 2026-10-18 | [跨机型验证：Senser/Jiritsu 链](report/2026-10-18-fx30-service-probe/) | 只读侦察证明这条链是**协议级**而非机型级的：大量存储 PID 随机型变（`0e8a`/`0e0e`），Senser 服务身份恒为 `0336`；已在 ILME-FX30 上验证 |
